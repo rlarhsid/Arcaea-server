@@ -4,7 +4,7 @@ from json import load
 from random import randint
 from time import time
 
-from .character import Character
+from .character import Character, UserCharacter
 from .constant import Constant
 from .error import InputError, MapLocked, NoData
 from .item import ItemFactory
@@ -133,6 +133,7 @@ class Map:
         self.chain_info: dict = None
 
         # self.requires: list[dict] = None
+        self.requires_any: 'list[dict]' = None
 
         self.disable_over: bool = None
         self.new_law: str = None
@@ -188,6 +189,8 @@ class Map:
             r['disable_over'] = self.disable_over
         if self.new_law is not None and self.new_law != '':
             r['new_law'] = self.new_law
+        if self.requires_any:
+            r['requires_any'] = self.requires_any
         return r
 
     def from_dict(self, raw_dict: dict) -> 'Map':
@@ -216,6 +219,7 @@ class Map:
 
         self.disable_over = raw_dict.get('disable_over')
         self.new_law = raw_dict.get('new_law')
+        self.requires_any = raw_dict.get('requires_any')
         return self
 
     def select_map_info(self):
@@ -474,7 +478,8 @@ class WorldSkillMixin:
             'skill_ilith_ivy': self._skill_ilith_ivy,
             'ilith_awakened_skill': self._ilith_awakened_skill,
             'skill_hikari_vanessa': self._skill_hikari_vanessa,
-            'skill_mithra': self._skill_mithra
+            'skill_mithra': self._skill_mithra,
+            'skill_chinatsu': self._skill_chinatsu,
         }
         if self.user_play.beyond_gauge == 0 and self.character_used.character_id == 35 and self.character_used.skill_id_displayed:
             self._special_tempest()
@@ -492,6 +497,7 @@ class WorldSkillMixin:
             'luna_uncap': self._luna_uncap,
             'skill_kanae_uncap': self._skill_kanae_uncap,
             'skill_eto_hoppe': self._skill_eto_hoppe,
+            'skill_intruder': self._skill_intruder,
         }
         if self.character_used.skill_id_displayed in factory_dict:
             factory_dict[self.character_used.skill_id_displayed]()
@@ -630,15 +636,37 @@ class WorldSkillMixin:
         kanae 觉醒技能，保存世界模式 progress 并在下次结算
         直接加减在 progress 最后
         技能存储 base_progress * PROG / 50，下一次消耗全部存储值（无视技能和搭档，但需要非技能隐藏状态）
+        6.0 更新：需要体力消耗才存
         '''
-        self.kanae_stored_progress = self.progress_normalized
-        self.user.current_map.reclimb(self.final_progress)
+        if self.user.current_map.stamina_cost > 0:
+            self.kanae_stored_progress = self.progress_normalized
+            self.user.current_map.reclimb(self.final_progress)
 
     def _skill_eto_hoppe(self) -> None:
         '''
         eto_hoppe 技能，体力大于等于 6 格时，世界进度翻倍
         '''
         if self.user.stamina.stamina >= 6:
+            self.character_bonus_progress_normalized = self.progress_normalized
+            self.user.current_map.reclimb(self.final_progress)
+
+    def _skill_chinatsu(self) -> None:
+        '''
+        chinatsu 技能，hp 超过时提高搭档能力值  
+        '''
+        _flag = self.user_play.skill_chinatsu_flag
+        if not self.user_play.hp_interval_bonus or not _flag:
+            return
+
+        x = _flag[:min(len(_flag), self.user_play.hp_interval_bonus)]
+        self.over_skill_increase = x.count('2') * 5
+        self.prog_skill_increase = x.count('1') * 5
+
+    def _skill_intruder(self) -> None:
+        '''
+        intruder 技能，夺舍后世界进度翻倍
+        '''
+        if self.user_play.invasion_flag:
             self.character_bonus_progress_normalized = self.progress_normalized
             self.user.current_map.reclimb(self.final_progress)
 
@@ -690,9 +718,13 @@ class BaseWorldPlay(WorldSkillMixin):
             'world_mode_locked_end_ts': self.user.world_mode_locked_end_ts,
             'beyond_boost_gauge': self.user.beyond_boost_gauge,
             # 'wpaid': 'helloworld',  # world play id ???
-            # progress_before_sub_boost
-            # progress_sub_boost_amount
-            # subscription_multiply
+            'progress_before_sub_boost': self.final_progress,
+            'progress_sub_boost_amount': 0,
+            # 'subscription_multiply'
+
+            # lephon_final: bool  dynamic map info
+            # lephon_active: bool  dynamic map info
+            # 'steps_modified': False,
         }
 
         if self.character_used.skill_id_displayed == 'skill_maya':
@@ -751,6 +783,11 @@ class BaseWorldPlay(WorldSkillMixin):
             if self.user_play.beyond_gauge == 0 and self.user.kanae_stored_prog > 0:
                 # 实在不想拆开了，在这里判断一下，注意这段不会在 BeyondWorldPlay 中执行
                 self.kanae_added_progress = self.user.kanae_stored_prog
+
+            if self.user_play.invasion_flag:  # not None and != 0
+                # 这里硬编码了搭档 id 72
+                self.character_used = UserCharacter(self.c, 72, self.user)
+                self.character_used.select_character_info()
         else:
             self.character_used.character_id = self.user.character.character_id
             self.character_used.level.level = self.user.character.level.level
@@ -807,6 +844,7 @@ class WorldPlay(BaseWorldPlay):
 
     def to_dict(self) -> dict:
         r = super().to_dict()
+
 
         # 基础进度加上搭档倍数 不带 character_bonus_progress 但是带 kanae 技能
         r['progress_partial_after_stat'] = self.progress_normalized
@@ -932,6 +970,7 @@ class BeyondWorldPlay(BaseWorldPlay):
             r['char_stats']['over_skill_increase'] = self.over_skill_increase
 
         r["user_map"]["steps"] = len(self.user.current_map.steps_for_climbing)
+
         r['affinity_multiply'] = self.affinity_multiplier
         if self.user_play.beyond_boost_gauge_usage != 0:
             r['beyond_boost_gauge_usage'] = self.user_play.beyond_boost_gauge_usage

@@ -50,6 +50,16 @@ def user_me(user_id):
         return success_return(UserOnline(c, user_id).to_dict())
 
 
+@bp.route('/me/toggle_invasion', methods=['POST'])  # insight skill
+@auth_required(request)
+@arc_try
+def toggle_invasion(user_id):
+    with Connect() as c:
+        user = UserOnline(c, user_id)
+        user.toggle_invasion()
+        return success_return({'user_id': user.user_id, 'insight_state': user.insight_state})
+
+
 @bp.route('/me/character', methods=['POST'])  # 角色切换
 @auth_required(request)
 @arc_try

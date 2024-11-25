@@ -862,5 +862,41 @@
 		],
 		"orig_price": 500,
 		"price": 500
+	},
+	{
+		"name": "ongeki_append_2",
+		"items": [
+			{
+				"type": "pack",
+				"id": "ongeki_append_2",
+				"is_available": true
+			},
+			{
+				"type": "core",
+				"amount": 4,
+				"id": "core_generic",
+				"is_available": true
+			}
+		],
+		"orig_price": 400,
+		"price": 400
+	},
+	{
+		"name": "lephon",
+		"items": [
+			{
+				"type": "pack",
+				"id": "lephon",
+				"is_available": true
+			},
+			{
+				"type": "core",
+				"amount": 5,
+				"id": "core_generic",
+				"is_available": true
+			}
+		],
+		"orig_price": 500,
+		"price": 500
 	}
 ]

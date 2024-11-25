@@ -12,7 +12,7 @@ class Config:
 
     SONG_FILE_HASH_PRE_CALCULATE = True
 
-    GAME_API_PREFIX = '/autumnequinox/33'  # str | list[str]
+    GAME_API_PREFIX = '/coldwind/35'  # 6.0.0 '/fallingleaves/34'  # str | list[str]
     OLD_GAME_API_PREFIX = []  # str | list[str]
 
     ALLOW_APPVERSION = []  # list[str]
@@ -85,6 +85,9 @@ class Config:
     # You can change this to make another PTT mechanism.
     BEST30_WEIGHT = 1 / 40
     RECENT10_WEIGHT = 1 / 40
+
+    INVASION_START_WEIGHT = 0.1
+    INVASION_HARD_WEIGHT = 0.1
 
     MAX_FRIEND_COUNT = 50
 

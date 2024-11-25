@@ -326,6 +326,8 @@ class UserInfo(User):
         self.current_map: 'Map' = None
         self.stamina: 'UserStamina' = None
 
+        self.insight_state: int = None
+
         self.__cores: list = None
         self.__packs: list = None
         self.__singles: list = None
@@ -335,6 +337,12 @@ class UserInfo(User):
         self.__world_songs: list = None
         self.curr_available_maps: list = None
         self.__course_banners: list = None
+
+    @property
+    def is_insight_enabled(self) -> bool:
+        if self.insight_state is None:
+            self.select_user_one_column('insight_state', 4, int)
+        return self.insight_state == 3 or self.insight_state == 5
 
     @property
     def cores(self) -> list:
@@ -547,6 +555,7 @@ class UserInfo(User):
             # 'custom_banner': 'online_banner_2024_06',
             # 'subscription_multiplier': 114,
             # 'memory_boost_ticket': 5,
+            'insight_state': self.insight_state,  # 0~2 不可选，3 技能激活，4 未激活，5 激活可选，6 未激活可选
         }
 
     def from_list(self, x: list) -> 'UserInfo':
@@ -590,6 +599,8 @@ class UserInfo(User):
         self.kanae_stored_prog = x[36] if x[36] else 0
 
         self.mp_notification_enabled = x[37] == 1
+
+        self.insight_state = x[38]
 
         return self
 
@@ -794,6 +805,19 @@ class UserOnline(UserInfo):
         self.favorite_character = UserCharacter(self.c, character_id, self)
         self.c.execute('''update user set favorite_character = :a where user_id = :b''',
                        {'a': self.favorite_character.character_id, 'b': self.user_id})
+
+    def toggle_invasion(self) -> None:
+        self.c.execute(
+            '''select insight_state from user where user_id = ?''', (self.user_id,))
+        x = self.c.fetchone()
+        if not x:
+            raise NoData('No user.', 108, -3)
+        self.insight_state = x[0]
+        rq = Constant.INSIGHT_TOGGLE_STATES
+        self.insight_state = rq[(rq.index(self.insight_state) + 1) % len(rq)]
+
+        self.c.execute(
+            '''update user set insight_state = ? where user_id = ?''', (self.insight_state, self.user_id))
 
 
 class UserChanger(UserInfo, UserRegister):
