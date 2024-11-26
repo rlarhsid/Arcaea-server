@@ -12,11 +12,11 @@ class Config:
 
     SONG_FILE_HASH_PRE_CALCULATE = True
 
-    GAME_API_PREFIX = '/natsugakuru/30'  # str | list[str]
+    GAME_API_PREFIX = '/coldwind/35'  # 6.0.0 '/fallingleaves/34'  # str | list[str]
     OLD_GAME_API_PREFIX = []  # str | list[str]
 
     ALLOW_APPVERSION = []  # list[str]
-    
+
     BUNDLE_STRICT_MODE = True
 
     SET_LINKPLAY_SERVER_AS_SUB_PROCESS = True
@@ -49,6 +49,7 @@ class Config:
 
     DOWNLOAD_USE_NGINX_X_ACCEL_REDIRECT = False
     NGINX_X_ACCEL_REDIRECT_PREFIX = '/nginx_download/'
+    BUNDLE_NGINX_X_ACCEL_REDIRECT_PREFIX = '/nginx_bundle_download/'
 
     DOWNLOAD_TIMES_LIMIT = 3000
     DOWNLOAD_TIME_GAP_LIMIT = 1000
@@ -85,6 +86,9 @@ class Config:
     BEST30_WEIGHT = 1 / 40
     RECENT10_WEIGHT = 1 / 40
 
+    INVASION_START_WEIGHT = 0.1
+    INVASION_HARD_WEIGHT = 0.1
+
     MAX_FRIEND_COUNT = 50
 
     WORLD_MAP_FOLDER_PATH = './database/map/'
@@ -99,6 +103,12 @@ class Config:
 
     GAME_LOGIN_RATE_LIMIT = '30/5 minutes'
     API_LOGIN_RATE_LIMIT = '10/5 minutes'
+    GAME_REGISTER_IP_RATE_LIMIT = '10/1 day'
+    GAME_REGISTER_DEVICE_RATE_LIMIT = '3/1 day'
+
+
+    NOTIFICATION_EXPIRE_TIME = 3 * 60 * 1000
+    
 
 
 class ConfigManager:

@@ -54,6 +54,12 @@ class User:
 
 
 class UserRegister(User):
+
+    limiter_ip = ArcLimiter(
+        Config.GAME_REGISTER_IP_RATE_LIMIT, 'game_register_ip')
+    limiter_device = ArcLimiter(
+        Config.GAME_REGISTER_DEVICE_RATE_LIMIT, 'game_register_device')
+
     def __init__(self, c) -> None:
         super().__init__()
         self.c = c
@@ -141,7 +147,13 @@ class UserRegister(User):
                 self.c.execute('''insert or replace into user_char_full values(?,?,?,?,?,?,0)''',
                                (self.user_id, i[0], i[1], exp, i[2], 0))
 
-    def register(self):
+    def register(self, device_id: str = None, ip: str = None):
+        if device_id is not None and not self.limiter_device.hit(device_id):
+            raise RateLimit(f'''Too many register attempts of device `{
+                            device_id}`''', 124, -213)
+        if ip is not None and ip != '127.0.0.1' and not self.limiter_ip.hit(ip):
+            raise RateLimit(f'''Too many register attempts of ip `{
+                            ip}`''', 124, -213)
         now = int(time.time() * 1000)
         if self.user_code is None:
             self._build_user_code()
@@ -305,6 +317,7 @@ class UserInfo(User):
         self.recent_score = Score()
         self.favorite_character = None
         self.max_stamina_notification_enabled = False
+        self.mp_notification_enabled = True
         self.prog_boost: int = 0
         self.beyond_boost_gauge: float = 0
         self.kanae_stored_prog: float = 0
@@ -312,6 +325,8 @@ class UserInfo(User):
         self.world_mode_locked_end_ts: int = None
         self.current_map: 'Map' = None
         self.stamina: 'UserStamina' = None
+
+        self.insight_state: int = None
 
         self.__cores: list = None
         self.__packs: list = None
@@ -322,6 +337,12 @@ class UserInfo(User):
         self.__world_songs: list = None
         self.curr_available_maps: list = None
         self.__course_banners: list = None
+
+    @property
+    def is_insight_enabled(self) -> bool:
+        if self.insight_state is None:
+            self.select_user_one_column('insight_state', 4, int)
+        return self.insight_state == 3 or self.insight_state == 5
 
     @property
     def cores(self) -> list:
@@ -495,7 +516,8 @@ class UserInfo(User):
             "settings": {
                 "favorite_character": favorite_character_id,
                 "is_hide_rating": self.is_hide_rating,
-                "max_stamina_notification_enabled": self.max_stamina_notification_enabled
+                "max_stamina_notification_enabled": self.max_stamina_notification_enabled,
+                "mp_notification_enabled": self.mp_notification_enabled,
             },
             "user_id": self.user_id,
             "name": self.name,
@@ -533,6 +555,7 @@ class UserInfo(User):
             # 'custom_banner': 'online_banner_2024_06',
             # 'subscription_multiplier': 114,
             # 'memory_boost_ticket': 5,
+            'insight_state': self.insight_state,  # 0~2 不可选，3 技能激活，4 未激活，5 激活可选，6 未激活可选
         }
 
     def from_list(self, x: list) -> 'UserInfo':
@@ -574,6 +597,10 @@ class UserInfo(User):
         self.world_mode_locked_end_ts = x[34] if x[34] else -1
         self.beyond_boost_gauge = x[35] if x[35] else 0
         self.kanae_stored_prog = x[36] if x[36] else 0
+
+        self.mp_notification_enabled = x[37] == 1
+
+        self.insight_state = x[38]
 
         return self
 
@@ -647,6 +674,20 @@ class UserInfo(User):
         self.beyond_boost_gauge = x[8] if x[8] else 0
         self.kanae_stored_prog = x[9] if x[9] else 0
 
+    def select_user_about_link_play(self) -> None:
+        '''
+            查询 user 表有关 link play 的信息
+        '''
+        self.c.execute(
+            '''select name, rating_ptt, is_hide_rating from user where user_id=?''', (self.user_id,))
+        x = self.c.fetchone()
+        if not x:
+            raise NoData('No user.', 108, -3)
+
+        self.name = x[0]
+        self.rating_ptt = x[1]
+        self.is_hide_rating = x[2] == 1
+
     @property
     def global_rank(self) -> int:
         '''用户世界排名，如果超过设定最大值，返回0'''
@@ -689,7 +730,7 @@ class UserInfo(User):
             '''update user set world_rank_score = ? where user_id = ?''', (x[0], self.user_id))
         self.world_rank_score = x[0]
 
-    def select_user_one_column(self, column_name: str, default_value=None) -> None:
+    def select_user_one_column(self, column_name: str, default_value=None, data_type=None) -> None:
         '''
             查询user表的某个属性
             请注意必须是一个普通属性，不能是一个类的实例
@@ -702,7 +743,12 @@ class UserInfo(User):
         if not x:
             raise NoData('No user.', 108, -3)
 
-        self.__dict__[column_name] = x[0] if x[0] else default_value
+        data = x[0] if x[0] is not None else default_value
+
+        if data_type is not None:
+            data = data_type(data)
+
+        self.__dict__[column_name] = data
 
     def update_user_one_column(self, column_name: str, value=None) -> None:
         '''
@@ -759,6 +805,19 @@ class UserOnline(UserInfo):
         self.favorite_character = UserCharacter(self.c, character_id, self)
         self.c.execute('''update user set favorite_character = :a where user_id = :b''',
                        {'a': self.favorite_character.character_id, 'b': self.user_id})
+
+    def toggle_invasion(self) -> None:
+        self.c.execute(
+            '''select insight_state from user where user_id = ?''', (self.user_id,))
+        x = self.c.fetchone()
+        if not x:
+            raise NoData('No user.', 108, -3)
+        self.insight_state = x[0]
+        rq = Constant.INSIGHT_TOGGLE_STATES
+        self.insight_state = rq[(rq.index(self.insight_state) + 1) % len(rq)]
+
+        self.c.execute(
+            '''update user set insight_state = ? where user_id = ?''', (self.insight_state, self.user_id))
 
 
 class UserChanger(UserInfo, UserRegister):

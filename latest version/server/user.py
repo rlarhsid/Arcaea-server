@@ -32,12 +32,12 @@ def register():
         else:
             device_id = 'low_version'
 
-        new_user.register()
+        ip = request.remote_addr
+        new_user.register(device_id, ip)
 
         # 注册后自动登录
         user = UserLogin(c)
-        user.login(new_user.name, new_user.password,
-                   device_id, request.remote_addr)
+        user.login(new_user.name, new_user.password, device_id, ip)
         current_app.logger.info(f'New user `{user.user_id}` registered')
         return success_return({'user_id': user.user_id, 'access_token': user.token})
 
@@ -48,6 +48,16 @@ def register():
 def user_me(user_id):
     with Connect() as c:
         return success_return(UserOnline(c, user_id).to_dict())
+
+
+@bp.route('/me/toggle_invasion', methods=['POST'])  # insight skill
+@auth_required(request)
+@arc_try
+def toggle_invasion(user_id):
+    with Connect() as c:
+        user = UserOnline(c, user_id)
+        user.toggle_invasion()
+        return success_return({'user_id': user.user_id, 'insight_state': user.insight_state})
 
 
 @bp.route('/me/character', methods=['POST'])  # 角色切换
@@ -157,7 +167,7 @@ def sys_set(user_id, set_arg):
             user.change_favorite_character(int(value))
         else:
             value = 'true' == value
-            if set_arg in ('is_hide_rating', 'max_stamina_notification_enabled'):
+            if set_arg in ('is_hide_rating', 'max_stamina_notification_enabled', 'mp_notification_enabled'):
                 user.update_user_one_column(set_arg, value)
         return success_return(user.to_dict())
 

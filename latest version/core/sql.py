@@ -437,7 +437,7 @@ class DatabaseMigrator:
     def _version_2_11_3_11(self):
         '''
         2.11.3.11 版本特殊更新，调整 recent30 表结构
-        recent30 表从 (user_id: int PK, song_id<index>: text, rating<index>: real, ...) \
+        recent30 表从 (user_id: int PK, rating<index>: real, song_id<index>: text, ...) \
         更改为 (user_id: int PK, r_index: int PK, time_played: int, song_id: text, difficulty: int, score: int, sp, p, n, m, hp, mod, clear_type, rating: real)
         '''
 
@@ -450,10 +450,11 @@ class DatabaseMigrator:
             for j in range(30):
                 rating = i[1 + j * 2]
                 rating = float(rating) if rating else 0
-                song_id_difficulty = i[2 + j * 2]
+                song_id_difficulty: str = i[2 + j * 2]
                 if song_id_difficulty:
                     song_id = song_id_difficulty[:-1]
-                    difficulty = int(song_id_difficulty[-1])
+                    difficulty = song_id_difficulty[-1]
+                    difficulty = int(difficulty) if difficulty.isdigit() else 0
                 else:
                     song_id = ''
                     difficulty = 0
@@ -509,6 +510,15 @@ class MemoryDatabase:
                        file_path text, time int, device_id text);''')
         self.c.execute(
             '''create index if not exists download_token_1 on download_token (song_id, file_name);''')
+        self.c.execute('''
+            create table if not exists notification(
+                user_id int, id int,
+                type text, content text,
+                sender_user_id int, sender_name text,
+                timestamp int,
+                primary key(user_id, id)
+            )
+        ''')
         self.conn.commit()
 
 

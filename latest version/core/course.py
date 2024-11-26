@@ -39,7 +39,7 @@ class Course:
 
         self.requirements: list = []
         self.charts: list = [None, None, None, None]
-        self.items: list = None
+        self.items: list = []
 
     def to_dict(self) -> dict:
         if self.course_name is None:
@@ -287,8 +287,8 @@ class CoursePlay(UserCourse):
         self.user_play.update_play_state_for_course()
 
         if self.user_play.course_play_state == 4:
+            self.user.select_user_about_stamina()
             if not self.is_completed:
-                self.user.select_user_about_stamina()
                 self.select_course_item()
                 for i in self.items:
                     i.user_claim_item(self.user)
